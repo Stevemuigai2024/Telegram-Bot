@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: telegram-movie-bot
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: 'npm install'
+    startCommand: 'npm start'
+    envVars:
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_SECRET
+        sync: false
+      - key: MPESA_CONSUMER_KEY
+        sync: false
+      - key: MPESA_CONSUMER_SECRET
+        sync: false
+      - key: MPESA_SHORT_CODE
+        sync: false
+      - key: MPESA_INITIATOR_NAME
+        sync: false
+      - key: MPESA_LIPA_NA_MPESA_SHORTCODE
+        sync: false
+      - key: MPESA_LIPA_NA_MPESA_PASSKEY
+        sync: false
+      - key: MPESA_SECURITY_CREDENTIAL
+        sync: false
+      - key: AIRTABLE_API_KEY
+        sync: false
+      - key: AIRTABLE_BASE_ID
+        sync: false
+      - key: PORT
+        value: 3000
