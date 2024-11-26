@@ -50,9 +50,22 @@ bot.command('movie', async (ctx) => {
   try {
     const movie = await getMovieById(movieId);
     if (movie) {
-      ctx.replyWithPhoto(movie.coverImage, {
-        caption: `${movie.title}\n${movie.description}\nPrice: $${movie.price}\nLink: ${movie.link}\nTo buy, use /buy ${movieId}`
-      });
+      // Debugging the image URL
+      console.log('Movie Cover Image URL:', movie.coverImage);  // Ensure this URL is correct and publicly accessible
+
+      // Check if image URL is valid and accessible
+      try {
+        // Attempt to fetch the image to verify the URL is correct
+        await axios.get(movie.coverImage, { responseType: 'arraybuffer' });
+
+        // Send the photo if the image URL is accessible
+        ctx.replyWithPhoto(movie.coverImage, {
+          caption: `${movie.title}\n${movie.description}\nPrice: $${movie.price}\nLink: ${movie.link}\nTo buy, use /buy ${movieId}`
+        });
+      } catch (error) {
+        console.error('Error fetching movie cover image:', error);
+        ctx.reply('Failed to load the movie image. Please try again later.');
+      }
     } else {
       ctx.reply('Movie not found.');
     }
