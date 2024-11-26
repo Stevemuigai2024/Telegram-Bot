@@ -13,6 +13,8 @@ const getMoviesFromDatabase = async () => {
     return records.map(record => {
       // Handle the Cover Image field, ensuring we get the URL if available
       const coverImage = record.get('Cover Image'); // The Cover Image field is returned as an array of objects
+      console.log('Cover Image:', coverImage); // Log the entire cover image field to inspect its structure
+
       let coverImageUrl = null;
 
       // Check if the Cover Image field contains attachments and extract the URL
@@ -55,6 +57,7 @@ const getMovieById = async (id) => {
 
     // Handle the Cover Image field
     const coverImage = record.get('Cover Image');
+    console.log('Cover Image (by ID):', coverImage); // Log the cover image for this specific record
     let coverImageUrl = null;
 
     // Check if the Cover Image field contains attachments and extract the URL
