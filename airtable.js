@@ -11,9 +11,12 @@ const getMoviesFromDatabase = async () => {
 
     // Process each record and return the movie data
     return records.map(record => {
+      // Log the raw data of the record to understand the structure
+      console.log('Raw record data:', record.fields);
+
       // Handle the Cover Image field, ensuring we get the URL if available
-      const coverImage = record.get('Cover Image'); // The Cover Image field is returned as an array of objects
-      console.log('Cover Image:', coverImage); // Log the entire cover image field to inspect its structure
+      const coverImage = record.get('Cover Image');
+      console.log('Cover Image field:', coverImage); // Log the entire cover image field to inspect its structure
 
       let coverImageUrl = null;
 
@@ -54,6 +57,9 @@ const getMovieById = async (id) => {
       console.error(`No record found with ID: ${id}`);
       return null;
     }
+
+    // Log the raw data of the record to understand the structure
+    console.log('Raw record data (by ID):', record.fields);
 
     // Handle the Cover Image field
     const coverImage = record.get('Cover Image');
