@@ -12,10 +12,12 @@ const getMoviesFromDatabase = async () => {
     // Process each record and return the movie data
     return records.map(record => {
       // Handle the Cover Image field, ensuring we get the URL if available
-      const coverImage = record.get('Cover Image');
-      const coverImageUrl = Array.isArray(coverImage) && coverImage[0] ? coverImage[0].url : null;
+      const coverImage = record.get('Cover Image'); // The Cover Image field is returned as an array
+      let coverImageUrl = null;
 
-      if (!coverImageUrl) {
+      if (Array.isArray(coverImage) && coverImage.length > 0) {
+        coverImageUrl = coverImage[0].url; // Get the URL from the first image in the array
+      } else {
         console.warn(`No valid cover image found for record ID: ${record.id}`);
       }
 
@@ -52,9 +54,11 @@ const getMovieById = async (id) => {
 
     // Handle the Cover Image field
     const coverImage = record.get('Cover Image');
-    const coverImageUrl = Array.isArray(coverImage) && coverImage[0] ? coverImage[0].url : null;
+    let coverImageUrl = null;
 
-    if (!coverImageUrl) {
+    if (Array.isArray(coverImage) && coverImage.length > 0) {
+      coverImageUrl = coverImage[0].url; // Get the URL from the first image in the array
+    } else {
       console.warn(`No valid cover image found for record ID: ${record.id}`);
     }
 
