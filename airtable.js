@@ -1,94 +1,68 @@
 const Airtable = require('airtable');
-require('dotenv').config();
-
 const base = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
 
-const getMoviesFromDatabase = async () => {
+async function getMoviesFromDatabase() {
+  const movies = [];
   try {
-    // Fetch records from Airtable
-    const records = await base('Movies').select({ view: 'Grid view' }).all();
-    console.log('Fetched records:', records); // Log all records fetched from Airtable
+    await base(process.env.AIRTABLE_TABLE_NAME)
+      .select({ view: process.env.AIRTABLE_VIEW_NAME })
+      .eachPage((records, fetchNextPage) => {
+        records.forEach((record) => {
+          let coverImageUrl = null;
+          const coverImage = record.get('Cover Image');
 
-    // Process each record and return the movie data
-    return records.map(record => {
-      // Log the raw data of the record to understand the structure
-      console.log('Raw record data:', record.fields);
+          if (Array.isArray(coverImage) && coverImage.length > 0) {
+            coverImageUrl = coverImage[0].url; // Use the first image URL
+          }
 
-      // Handle the Cover Image field, ensuring we get the URL if available
-      const coverImage = record.get('Cover Image');
-      console.log('Cover Image field:', coverImage); // Log the entire cover image field to inspect its structure
+          // Fallback to a placeholder image if no cover image exists
+          coverImageUrl = coverImageUrl || 'https://via.placeholder.com/300x400.png?text=No+Image';
 
-      let coverImageUrl = null;
+          console.log(`Extracted cover image URL: ${coverImageUrl}`);
 
-      // Check if the Cover Image field contains attachments and extract the URL
-      if (Array.isArray(coverImage) && coverImage.length > 0) {
-        coverImageUrl = coverImage[0].url; // Extract the URL of the first image in the array
-      } else {
-        console.warn(`No valid cover image found for record ID: ${record.id}`);
-      }
-
-      // Return the formatted movie object
-      return {
-        id: record.id,
-        code: record.get('Movie Code'),
-        title: record.get('Title'),
-        genre: record.get('Genre'),
-        director: record.get('Director'),
-        year: record.get('Year'),
-        price: record.get('Price'),
-        link: record.get('Link'),
-        coverImageUrl: coverImageUrl || 'https://example.com/default-image.png' // Fallback if no image
-      };
-    });
+          movies.push({
+            id: record.id,
+            title: record.get('Title'),
+            description: record.get('Description'),
+            price: record.get('Price'),
+            coverImage: coverImageUrl,
+            link: record.get('Link'),
+          });
+        });
+        fetchNextPage();
+      });
   } catch (error) {
-    // Log the error details
-    console.error('Error fetching movies from Airtable:', error.message);
-    console.error('Stack trace:', error.stack); // Log stack trace for better debugging
-    return []; // Return an empty array in case of an error
+    console.error('Error fetching movies from Airtable:', error);
   }
-};
+  return movies;
+}
 
-const getMovieById = async (id) => {
+async function getMovieById(movieId) {
   try {
-    console.log(`Fetching movie with ID: ${id}`);
-    const record = await base('Movies').find(id);
-
-    if (!record) {
-      console.error(`No record found with ID: ${id}`);
-      return null;
-    }
-
-    // Log the raw data of the record to understand the structure
-    console.log('Raw record data (by ID):', record.fields);
-
-    // Handle the Cover Image field
-    const coverImage = record.get('Cover Image');
-    console.log('Cover Image (by ID):', coverImage); // Log the cover image for this specific record
+    const record = await base(process.env.AIRTABLE_TABLE_NAME).find(movieId);
     let coverImageUrl = null;
+    const coverImage = record.get('Cover Image');
 
-    // Check if the Cover Image field contains attachments and extract the URL
     if (Array.isArray(coverImage) && coverImage.length > 0) {
-      coverImageUrl = coverImage[0].url; // Extract the URL of the first image in the array
-    } else {
-      console.warn(`No valid cover image found for record ID: ${record.id}`);
+      coverImageUrl = coverImage[0].url;
     }
 
-    // Return the formatted movie object
+    coverImageUrl = coverImageUrl || 'https://via.placeholder.com/300x400.png?text=No+Image';
+
+    console.log(`Extracted cover image URL for movie ID ${movieId}: ${coverImageUrl}`);
+
     return {
       id: record.id,
-      code: record.get('Movie Code'),
       title: record.get('Title'),
-      genre: record.get('Genre'),
-      director: record.get('Director'),
-      year: record.get('Year'),
+      description: record.get('Description'),
       price: record.get('Price'),
+      coverImage: coverImageUrl,
       link: record.get('Link'),
-      coverImageUrl: coverImageUrl || 'https://example.com/default-image.png' // Fallback if no image
     };
   } catch (error) {
-    console.error(`Error fetching movie with ID ${id} from Airtable:`, error);
-    return null; // Return null in case of an error
+    console.error(`Error fetching movie with ID ${movieId}:`, error);
+    return null;
   }
-};
+}
 
 module.exports = { getMoviesFromDatabase, getMovieById };
