@@ -1,68 +1,50 @@
 const Airtable = require('airtable');
+require('dotenv').config();
+
 const base = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
 
-async function getMoviesFromDatabase() {
-  const movies = [];
+const getMoviesFromDatabase = async () => {
   try {
-    await base(process.env.AIRTABLE_TABLE_NAME)
-      .select({ view: process.env.AIRTABLE_VIEW_NAME })
-      .eachPage((records, fetchNextPage) => {
-        records.forEach((record) => {
-          let coverImageUrl = null;
-          const coverImage = record.get('Cover Image');
+    const records = await base('Movies').select({ view: 'Grid view' }).all();
 
-          if (Array.isArray(coverImage) && coverImage.length > 0) {
-            coverImageUrl = coverImage[0].url; // Use the first image URL
-          }
+    return records.map(record => {
+      const coverImageField = record.get('Cover Image');
+      const coverImage = Array.isArray(coverImageField) && coverImageField.length > 0
+        ? coverImageField[0].url
+        : 'https://example.com/default-image.png';
 
-          // Fallback to a placeholder image if no cover image exists
-          coverImageUrl = coverImageUrl || 'https://via.placeholder.com/300x400.png?text=No+Image';
-
-          console.log(`Extracted cover image URL: ${coverImageUrl}`);
-
-          movies.push({
-            id: record.id,
-            title: record.get('Title'),
-            description: record.get('Description'),
-            price: record.get('Price'),
-            coverImage: coverImageUrl,
-            link: record.get('Link'),
-          });
-        });
-        fetchNextPage();
-      });
+      return {
+        id: record.id,
+        title: record.get('Title') || 'Untitled',
+        price: record.get('Price') || '0',
+        coverImage,
+      };
+    });
   } catch (error) {
-    console.error('Error fetching movies from Airtable:', error);
+    console.error('Error fetching movies:', error);
+    return [];
   }
-  return movies;
-}
+};
 
-async function getMovieById(movieId) {
+const getMovieById = async (id) => {
   try {
-    const record = await base(process.env.AIRTABLE_TABLE_NAME).find(movieId);
-    let coverImageUrl = null;
-    const coverImage = record.get('Cover Image');
+    const record = await base('Movies').find(id);
 
-    if (Array.isArray(coverImage) && coverImage.length > 0) {
-      coverImageUrl = coverImage[0].url;
-    }
-
-    coverImageUrl = coverImageUrl || 'https://via.placeholder.com/300x400.png?text=No+Image';
-
-    console.log(`Extracted cover image URL for movie ID ${movieId}: ${coverImageUrl}`);
+    const coverImageField = record.get('Cover Image');
+    const coverImage = Array.isArray(coverImageField) && coverImageField.length > 0
+      ? coverImageField[0].url
+      : 'https://example.com/default-image.png';
 
     return {
       id: record.id,
-      title: record.get('Title'),
-      description: record.get('Description'),
-      price: record.get('Price'),
-      coverImage: coverImageUrl,
-      link: record.get('Link'),
+      title: record.get('Title') || 'Untitled',
+      price: record.get('Price') || '0',
+      coverImage,
     };
   } catch (error) {
-    console.error(`Error fetching movie with ID ${movieId}:`, error);
+    console.error(`Error fetching movie with ID ${id}:`, error);
     return null;
   }
-}
+};
 
 module.exports = { getMoviesFromDatabase, getMovieById };
