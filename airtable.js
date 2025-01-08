@@ -1,4 +1,3 @@
-// Updated airtable.js
 const Airtable = require('airtable');
 require('dotenv').config();
 
@@ -7,7 +6,7 @@ const base = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process
 const getMoviesFromDatabase = async () => {
   try {
     const records = await base('Movies').select({ view: 'Grid view' }).all();
-    console.log("Raw Airtable records:", records);
+    console.log("Raw Airtable records:", records); // Log raw Airtable records to see the fetched data
 
     return records.map(record => {
       const coverImageField = record.get('Cover Image');
