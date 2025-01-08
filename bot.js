@@ -34,6 +34,7 @@ bot.command('start', (ctx) => {
 bot.command('list', async (ctx) => {
   try {
     const movies = await getMoviesFromDatabase();
+    console.log("Movies fetched for /list:", movies);
     if (!movies || movies.length === 0) {
       ctx.reply('No movies available at the moment.');
     } else {
@@ -71,10 +72,15 @@ bot.command('movie', async (ctx) => {
 });
 
 // Webhook setup for Render hosting
-const webhookUrl = `${process.env.WEBHOOK_URL}/bot${process.env.TELEGRAM_TOKEN}`;
-bot.telegram.setWebhook(webhookUrl);
+const webhookUrl = process.env.WEBHOOK_URL;
+if (!webhookUrl) {
+  console.error("Error: WEBHOOK_URL is undefined. Set it in your environment variables.");
+  process.exit(1);
+}
+
+bot.telegram.setWebhook(`${webhookUrl}/bot${process.env.TELEGRAM_TOKEN}`);
 app.use(bot.webhookCallback(`/bot${process.env.TELEGRAM_TOKEN}`));
-console.log(`Webhook set at: ${webhookUrl}`);
+console.log(`Webhook set at: ${webhookUrl}/bot${process.env.TELEGRAM_TOKEN}`);
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
