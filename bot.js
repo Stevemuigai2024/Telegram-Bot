@@ -48,14 +48,35 @@ bot.command('list', async (ctx) => {
   }
 });
 
-// Other commands remain unchanged...
+bot.command('movie', async (ctx) => {
+  const movieId = ctx.message.text.split(' ')[1];
+  try {
+    const movie = await getMovieById(movieId);
+    if (movie) {
+      try {
+        await axios.get(movie.coverImage, { responseType: 'arraybuffer' });
+        ctx.replyWithPhoto(movie.coverImage, {
+          caption: `${movie.title}\n${movie.description || ''}\nPrice: $${movie.price}\nLink: ${movie.link}\nTo buy, use /buy ${movieId}`
+        });
+      } catch (error) {
+        ctx.reply('Failed to load the movie image.');
+      }
+    } else {
+      ctx.reply('Movie not found.');
+    }
+  } catch (error) {
+    console.error('Error fetching movie details:', error);
+    ctx.reply('An error occurred while fetching movie details. Please try again later.');
+  }
+});
+
+// Webhook setup for Render hosting
+const webhookUrl = `${process.env.WEBHOOK_URL}/bot${process.env.TELEGRAM_TOKEN}`;
+bot.telegram.setWebhook(webhookUrl);
+app.use(bot.webhookCallback(`/bot${process.env.TELEGRAM_TOKEN}`));
+console.log(`Webhook set at: ${webhookUrl}`);
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-});
-
-bot.launch().catch((error) => {
-  console.error('Failed to launch bot:', error);
-  process.exit(1);
 });
