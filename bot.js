@@ -1,4 +1,3 @@
-// Updated bot.js
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const express = require('express');
@@ -34,7 +33,7 @@ bot.command('start', (ctx) => {
 bot.command('list', async (ctx) => {
   try {
     const movies = await getMoviesFromDatabase();
-    console.log("Movies fetched for /list:", movies);
+    console.log("Movies fetched for /list:", movies);  // Log the fetched movies here
     if (!movies || movies.length === 0) {
       ctx.reply('No movies available at the moment.');
     } else {
