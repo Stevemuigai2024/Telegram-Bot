@@ -1,87 +1,184 @@
-require('dotenv').config();
-const { Telegraf } = require('telegraf');
-const express = require('express');
-const bodyParser = require('body-parser');
-const axios = require('axios');
-const LocalSession = require('telegraf-session-local');
-const { createPayment, executePayment } = require('./paypal.js');
-const { initializeMpesa, createMpesaPayment } = require('./mpesa.js');
-const { getMoviesFromDatabase, getMovieById } = require('./airtable.js');
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from flask import Flask, request as flask_request
+from dotenv import load_dotenv
+import os
+import paypalrestsdk
+import json
+import logging
+import asyncio
+from telegram.request import HTTPXRequest
+from telegram.error import BadRequest
 
-const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
-const app = express();
-app.use(bodyParser.json());
+# Load environment variables
+load_dotenv()
 
-bot.use(new LocalSession({ database: 'example_db.json' }).middleware());
+app = Flask(__name__)
+port = int(os.getenv("PORT", 10000))
 
-const mpesaConfig = {
-  consumerKey: process.env.MPESA_CONSUMER_KEY,
-  consumerSecret: process.env.MPESA_CONSUMER_SECRET,
-  shortCode: process.env.MPESA_SHORT_CODE,
-  initiatorName: process.env.MPESA_INITIATOR_NAME,
-  lipaNaMpesaShortcode: process.env.MPESA_LIPA_NA_MPESA_SHORTCODE,
-  lipaNaMpesaPasskey: process.env.MPESA_LIPA_NA_MPESA_PASSKEY,
-  securityCredential: process.env.MPESA_SECURITY_CREDENTIAL
-};
+@app.route('/')
+def home():
+    return 'Hello World!'
 
-initializeMpesa(mpesaConfig);
+@app.route('/webhook', methods=['POST'])
+async def webhook():
+    logger.info("Webhook received")
+    logger.info(f"Request JSON: {flask_request.get_json()}")
+    try:
+        update = Update.de_json(flask_request.get_json(force=True), bot)
+        await application.process_update(update)
+    except Exception as e:
+        logger.error(f"Error processing update: {e}")
+    return 'ok', 200
 
-bot.command('start', (ctx) => {
-  ctx.reply('Welcome to the Telegram Movie Bot! Use /list to see available movies.');
-});
+# Configure logging
+logging.basicConfig(format="%(asctime)s - %(name=s - %(levelname=s - %(message=s", level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-bot.command('list', async (ctx) => {
-  try {
-    const movies = await getMoviesFromDatabase();
-    console.log("Movies fetched for /list:", movies);  // Log the fetched movies here
-    if (!movies || movies.length === 0) {
-      ctx.reply('No movies available at the moment.');
-    } else {
-      const movieList = movies
-        .map(movie => `${movie.title || 'Unknown Title'} - $${movie.price || 'N/A'} - ID: ${movie.id}`)
-        .join('\n');
-      ctx.reply(`Available Movies:\n${movieList}`);
-    }
-  } catch (error) {
-    console.error('Error listing movies:', error);
-    ctx.reply('An error occurred while listing movies. Please try again later.');
-  }
-});
+# Load bot token from environment
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("Bot token is not set. Please check your .env file or environment variables.")
 
-bot.command('movie', async (ctx) => {
-  const movieId = ctx.message.text.split(' ')[1];
-  try {
-    const movie = await getMovieById(movieId);
-    if (movie) {
-      try {
-        await axios.get(movie.coverImage, { responseType: 'arraybuffer' });
-        ctx.replyWithPhoto(movie.coverImage, {
-          caption: `${movie.title}\n${movie.description || ''}\nPrice: $${movie.price}\nLink: ${movie.link}\nTo buy, use /buy ${movieId}`
-        });
-      } catch (error) {
-        ctx.reply('Failed to load the movie image.');
-      }
-    } else {
-      ctx.reply('Movie not found.');
-    }
-  } catch (error) {
-    console.error('Error fetching movie details:', error);
-    ctx.reply('An error occurred while fetching movie details. Please try again later.');
-  }
-});
+# Increase connection pool size and timeout using HTTPXRequest
+request = HTTPXRequest(
+    connection_pool_size=64,  # Increase the pool size further
+    connect_timeout=30,
+    read_timeout=30,
+    pool_timeout=30
+)
 
-// Webhook setup for Render hosting
-const webhookUrl = process.env.WEBHOOK_URL;
-if (!webhookUrl) {
-  console.error("Error: WEBHOOK_URL is undefined. Set it in your environment variables.");
-  process.exit(1);
-}
+# Create bot and application
+bot = Bot(token=BOT_TOKEN, request=request)
+application = Application.builder().token(BOT_TOKEN).request(request).build()
 
-bot.telegram.setWebhook(`${webhookUrl}/bot${process.env.TELEGRAM_TOKEN}`);
-app.use(bot.webhookCallback(`/bot${process.env.TELEGRAM_TOKEN}`));
-console.log(`Webhook set at: ${webhookUrl}/bot${process.env.TELEGRAM_TOKEN}`);
+# Configure PayPal
+paypalrestsdk.configure({
+    "mode": "sandbox",  # Change to "live" for production
+    "client_id": os.getenv("PAYPAL_CLIENT_ID"),  # Load from environment
+    "client_secret": os.getenv("PAYPAL_CLIENT_SECRET")  # Load from environment
+})
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+# Load movies database
+with open('movies.json', 'r') as file:
+    movies = json.load(file)
+
+# Error handler function
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error(msg="Exception while handling an update:", exc_info=context.error)
+
+# Add error handler
+application.add_error_handler(error_handler)
+
+# Start command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    welcome_text = "Welcome to MovieBot! 🎬\nBrowse and buy movies easily."
+    keyboard = [[InlineKeyboardButton(movie["title"], callback_data=f"movie_{movie['id']}") for movie in movies]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+
+# Handle movie selection
+async def movie_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try:
+        await query.answer()
+    except BadRequest as e:
+        logger.error(f"Failed to answer callback query: {e}")
+
+    movie_id = query.data.split("_")[1]
+    movie = next((m for m in movies if m["id"] == movie_id), None)
+
+    if movie:
+        text = f"*{movie['title']}*\n{movie['description']}\nPrice: ${movie['price']}"
+        keyboard = [[InlineKeyboardButton("Buy Now", callback_data=f"buy_{movie['id']}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if 'preview_video' in movie:
+            await query.message.reply_video(video=movie["preview_video"], caption=text, parse_mode="Markdown", reply_markup=reply_markup)
+        else:
+            await query.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+
+# Handle purchase
+async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try:
+        await query.answer()
+    except BadRequest as e:
+        logger.error(f"Failed to answer callback query: {e}")
+
+    movie_id = query.data.split("_")[1]
+    movie = next((m for m in movies if m["id"] == movie_id), None)
+
+    if movie:
+        # Create PayPal payment
+        payment = paypalrestsdk.Payment({
+            "intent": "sale",
+            "payer": {"payment_method": "paypal"},
+            "redirect_urls": {
+                "return_url": "https://paypaltelegrambot.onrender.com/payment/return",
+                "cancel_url": "https://paypaltelegrambot.onrender.com/payment/cancel"
+            },
+            "transactions": [{
+                "item_list": {
+                    "items": [{
+                        "name": movie["title"],
+                        "sku": movie["id"],
+                        "price": str(movie["price"]),
+                        "currency": "USD",
+                        "quantity": 1
+                    }]
+                },
+                "amount": {
+                    "total": str(movie["price"]),
+                    "currency": "USD"
+                },
+                "description": movie["description"]
+            }]
+        })
+
+        if payment.create():
+            for link in payment.links:
+                if link.rel == "approval_url":
+                    approval_url = link.href
+                    keyboard = [[InlineKeyboardButton("Pay with PayPal", url=approval_url)]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await query.message.reply_text("Click below to complete your purchase:", reply_markup=reply_markup)
+                    return
+        else:
+            logger.error(payment.error)
+            await query.message.reply_text("Payment creation failed. Please try again later.")
+
+# After successful payment, send download link
+async def send_download_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Verify payment using PayPal SDK or webhook listener
+    # Placeholder logic for actual verification
+    movie_id = "1"  # Replace with dynamic extraction from payment metadata
+    movie = next((m for m in movies if m["id"] == movie_id), None)
+
+    if movie:
+        await update.message.reply_text(f"Thank you for your purchase! 🎉\nHere is your download link: {movie['download_link']}")
+
+# Add handlers
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CallbackQueryHandler(movie_details, pattern="^movie_"))
+application.add_handler(CallbackQueryHandler(handle_purchase, pattern="^buy_"))
+
+async def initialize_bot():
+    await bot.initialize()
+
+def run_app():
+    logger.info(f"Starting Flask app on port {port}")
+    app.run(host='0.0.0.0', port=port, use_reloader=False)
+
+async def main():
+    webhook_url = f"https://paypaltelegrambot.onrender.com/webhook"
+    await bot.set_webhook(webhook_url)
+    logger.info(f"Webhook set to {webhook_url}")
+
+    await initialize_bot()
+    await application.initialize()
+
+    run_app()
+
+if __name__ == "__main__":
+    asyncio.run(main())
